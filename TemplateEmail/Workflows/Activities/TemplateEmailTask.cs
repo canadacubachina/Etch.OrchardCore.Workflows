@@ -108,7 +108,7 @@ namespace Etch.OrchardCore.Workflows.TemplateEmail.Workflows.Activities
             {
                 Subject = subjectTask.Result.Trim(),
                 Body = body.Trim(),
-                IsBodyHtml = IsBodyHtml
+                IsHtmlBody = IsBodyHtml
             };
 
             message.To = recipientsTask.Result.Trim();
