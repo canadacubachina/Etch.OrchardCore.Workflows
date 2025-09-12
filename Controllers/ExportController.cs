@@ -202,7 +202,7 @@ namespace Etch.OrchardCore.Workflows.Controllers
 
         public override async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
         {
-            if (!await _authorizationService.AuthorizeAsync(User, Permissions.ExportWorkflows))
+            if (!await _authorizationService.AuthorizeAsync(User, Etch.OrchardCore.Workflows.Export.Permissions.ExportWorkflows))
             {
                 context.Result = Unauthorized();
             }

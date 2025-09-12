@@ -1,5 +1,5 @@
-﻿using CsvHelper;
-using Newtonsoft.Json.Linq;
+using CsvHelper;
+using System.Text.Json;
 using OrchardCore.Workflows.Models;
 using System.Collections.Generic;
 using System.Globalization;
@@ -49,14 +49,24 @@ namespace Etch.OrchardCore.Workflows.Export.Services
                 return result;
             }
 
-            var output = instance.State.Value<JObject>("Output");
+            // Get the raw JSON string for "Output"
+            var outputJson = instance.State["Output"]?.ToString();
 
-            if (output == null)
+            if (string.IsNullOrWhiteSpace(outputJson))
             {
                 return result;
             }
 
-            var outputDict = output.ToObject<IDictionary<string, string>>();
+            // Parse with System.Text.Json
+            IDictionary<string, string> outputDict;
+            try
+            {
+                outputDict = JsonSerializer.Deserialize<Dictionary<string, string>>(outputJson);
+            }
+            catch
+            {
+                outputDict = new Dictionary<string, string>();
+            }
 
             // Merge dictionaries
             return new[] { result, outputDict }.SelectMany(dict => dict)
