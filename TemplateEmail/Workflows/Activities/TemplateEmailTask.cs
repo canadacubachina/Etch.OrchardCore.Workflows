@@ -1,4 +1,4 @@
-﻿using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using OrchardCore.Email;
 using OrchardCore.Liquid;
@@ -16,7 +16,7 @@ namespace Etch.OrchardCore.Workflows.TemplateEmail.Workflows.Activities
     {
         private readonly IWorkflowExpressionEvaluator _expressionEvaluator;
         private readonly ILogger<TemplateEmailTask> _logger;
-        private readonly ISmtpService _smtpService;
+        private readonly IEmailService _smtpService;
         private readonly TemplatesManager _templatesManager;
 
         public TemplateEmailTask(
@@ -24,7 +24,7 @@ namespace Etch.OrchardCore.Workflows.TemplateEmail.Workflows.Activities
             ILiquidTemplateManager liquidTemplateManager,
             IStringLocalizer<TemplateEmailTask> localizer,
             ILogger<TemplateEmailTask> logger,
-            ISmtpService smtpService,
+            IEmailService smtpService,
             TemplatesManager templatesManager
         )
         {
@@ -107,8 +107,7 @@ namespace Etch.OrchardCore.Workflows.TemplateEmail.Workflows.Activities
             var message = new MailMessage
             {
                 Subject = subjectTask.Result.Trim(),
-                Body = body.Trim(),
-                IsHtmlBody = IsBodyHtml
+                HtmlBody = body.Trim()                
             };
 
             message.To = recipientsTask.Result.Trim();
