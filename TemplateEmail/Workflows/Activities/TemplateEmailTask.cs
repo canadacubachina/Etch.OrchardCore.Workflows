@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Localization;
-using Microsoft.Extensions.Logging;
 using OrchardCore.Email;
+using OrchardCore.Email.Workflows;
 using OrchardCore.Liquid;
 using OrchardCore.Templates.Services;
 using OrchardCore.Workflows.Abstractions.Models;
@@ -8,29 +8,30 @@ using OrchardCore.Workflows.Activities;
 using OrchardCore.Workflows.Models;
 using OrchardCore.Workflows.Services;
 using System.Collections.Generic;
+using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 
 namespace Etch.OrchardCore.Workflows.TemplateEmail.Workflows.Activities
 {
-    public class TemplateEmailTask : TaskActivity
+    public class TemplateEmailTask : TaskActivity<TemplateEmailTask>
     {
         private readonly IWorkflowExpressionEvaluator _expressionEvaluator;
-        private readonly ILogger<TemplateEmailTask> _logger;
-        private readonly IEmailService _smtpService;
+        private readonly HtmlEncoder _htmlEncoder;
+        private readonly IEmailService _emailService;
         private readonly TemplatesManager _templatesManager;
 
         public TemplateEmailTask(
             IWorkflowExpressionEvaluator expressionEvaluator,
             ILiquidTemplateManager liquidTemplateManager,
             IStringLocalizer<TemplateEmailTask> localizer,
-            ILogger<TemplateEmailTask> logger,
+            HtmlEncoder htmlEncoder,
             IEmailService smtpService,
             TemplatesManager templatesManager
         )
         {
             _expressionEvaluator = expressionEvaluator;
-            _logger = logger;
-            _smtpService = smtpService;
+            _htmlEncoder = htmlEncoder;
+            _emailService = smtpService;
             _templatesManager = templatesManager;
 
             T = localizer;
@@ -42,7 +43,18 @@ namespace Etch.OrchardCore.Workflows.TemplateEmail.Workflows.Activities
         public override string Name => nameof(TemplateEmailTask);
         public override LocalizedString Category => T["Messaging"];
 
+        public WorkflowExpression<string> Author
+        {
+            get => GetProperty(() => new WorkflowExpression<string>());
+            set => SetProperty(value);
+        }
         public WorkflowExpression<string> Sender
+        {
+            get => GetProperty(() => new WorkflowExpression<string>());
+            set => SetProperty(value);
+        }
+
+        public WorkflowExpression<string> ReplyTo
         {
             get => GetProperty(() => new WorkflowExpression<string>());
             set => SetProperty(value);
@@ -55,6 +67,17 @@ namespace Etch.OrchardCore.Workflows.TemplateEmail.Workflows.Activities
             set => SetProperty(value);
         }
 
+        public WorkflowExpression<string> Cc
+        {
+            get => GetProperty(() => new WorkflowExpression<string>());
+            set => SetProperty(value);
+        }
+
+        public WorkflowExpression<string> Bcc
+        {
+            get => GetProperty(() => new WorkflowExpression<string>());
+            set => SetProperty(value);
+        }
         public WorkflowExpression<string> Subject
         {
             get => GetProperty(() => new WorkflowExpression<string>());
@@ -73,11 +96,49 @@ namespace Etch.OrchardCore.Workflows.TemplateEmail.Workflows.Activities
             set => SetProperty(value);
         }
 
-        public bool IsBodyHtml
-        {
-            get => GetProperty(() => true);
-            set => SetProperty(value);
-        }
+        //public MailMessageBodyFormat BodyFormat
+        //{
+        //    get => GetProperty(() => MailMessageBodyFormat.All);
+        //    set => SetProperty(value);
+        //}
+
+        //public WorkflowExpression<string> TextBody
+        //{
+        //    get
+        //    {
+        //        var textBody = GetProperty<WorkflowExpression<string>>();
+
+        //        if (textBody == null && !GetProperty(() => true, "IsHtmlBody"))
+        //        {
+        //            textBody = GetProperty(() => new WorkflowExpression<string>(), "Body");
+        //        }
+
+        //        return textBody ?? new WorkflowExpression<string>();
+        //    }
+        //    set => SetProperty(value);
+        //}
+
+        //public WorkflowExpression<string> HtmlBody
+        //{
+        //    get
+        //    {
+        //        var htmlBody = GetProperty<WorkflowExpression<string>>();
+
+        //        if (htmlBody == null && GetProperty(() => true, "IsHtmlBody"))
+        //        {
+        //            htmlBody = GetProperty(() => new WorkflowExpression<string>(), "Body");
+        //        }
+
+        //        return htmlBody ?? new WorkflowExpression<string>();
+        //    }
+        //    set => SetProperty(value);
+        //}
+
+        //public bool IsBodyHtml
+        //{
+        //    get => GetProperty(() => true);
+        //    set => SetProperty(value);
+        //}
 
         public override IEnumerable<Outcome> GetPossibleOutcomes(WorkflowExecutionContext workflowContext, ActivityContext activityContext)
         {
@@ -86,10 +147,18 @@ namespace Etch.OrchardCore.Workflows.TemplateEmail.Workflows.Activities
 
         public override async Task<ActivityExecutionResult> ExecuteAsync(WorkflowExecutionContext workflowContext, ActivityContext activityContext)
         {
-            var senderTask = _expressionEvaluator.EvaluateAsync(Sender, workflowContext, null);
-            var recipientsTask = _expressionEvaluator.EvaluateAsync(Recipients, workflowContext, null);
-            var subjectTask = _expressionEvaluator.EvaluateAsync(Subject, workflowContext, null);
+            
             var body = await _expressionEvaluator.EvaluateAsync(Body, workflowContext, null);
+
+            var author = await _expressionEvaluator.EvaluateAsync(Author, workflowContext, null);
+            var sender = await _expressionEvaluator.EvaluateAsync(Sender, workflowContext, null);
+            var replyTo = await _expressionEvaluator.EvaluateAsync(ReplyTo, workflowContext, null);
+            var recipients = await _expressionEvaluator.EvaluateAsync(Recipients, workflowContext, null);
+            var cc = await _expressionEvaluator.EvaluateAsync(Cc, workflowContext, null);
+            var bcc = await _expressionEvaluator.EvaluateAsync(Bcc, workflowContext, null);
+            var subject = await _expressionEvaluator.EvaluateAsync(Subject, workflowContext, null);
+            //var textBody = await _expressionEvaluator.EvaluateAsync(TextBody, workflowContext, null);
+            //var htmlBody = await _expressionEvaluator.EvaluateAsync(HtmlBody, workflowContext, _htmlEncoder);
 
             if (!string.IsNullOrEmpty(TemplateName))
             {
@@ -101,23 +170,43 @@ namespace Etch.OrchardCore.Workflows.TemplateEmail.Workflows.Activities
                     .Replace("{{ body }}", body)
                     .Replace("{{body}}", body);
             }
-            
-            await Task.WhenAll(senderTask, recipientsTask, subjectTask);
+
 
             var message = new MailMessage
             {
-                Subject = subjectTask.Result.Trim(),
-                HtmlBody = body.Trim()                
+                // Author and Sender are both not required fields.
+                From = author?.Trim() ?? sender?.Trim(),
+                To = recipients?.Trim(),
+                Cc = cc?.Trim(),
+                Bcc = bcc?.Trim(),
+                // Email reply-to header https://tools.ietf.org/html/rfc4021#section-2.1.4
+                ReplyTo = replyTo?.Trim(),
+                Subject = subject?.Trim(),
+                HtmlBody = body?.Trim(),
             };
 
-            message.To = recipientsTask.Result.Trim();
+            //switch (BodyFormat)
+            //{
+            //    case MailMessageBodyFormat.All:
+            //        message.HtmlBody = htmlBody?.Trim();
+            //        message.TextBody = textBody?.Trim();
+            //        break;
+            //    case MailMessageBodyFormat.Text:
+            //        message.TextBody = textBody?.Trim();
+            //        break;
+            //    case MailMessageBodyFormat.Html:
+            //        message.HtmlBody = htmlBody?.Trim();
+            //        break;
+            //    default:
+            //        break;
+            //}
 
-            if (!string.IsNullOrWhiteSpace(senderTask.Result))
+            if (!string.IsNullOrWhiteSpace(sender))
             {
-                message.From = senderTask.Result.Trim();
+                message.Sender = sender.Trim();
             }
 
-            var result = await _smtpService.SendAsync(message);
+            var result = await _emailService.SendAsync(message);
             workflowContext.LastResult = result;
 
             if (!result.Succeeded)
