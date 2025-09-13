@@ -170,6 +170,8 @@ namespace Etch.OrchardCore.Workflows.TemplateEmail.Workflows.Activities
                     .Replace("{{body}}", body);
             }
 
+            var expressionBody = new WorkflowExpression<string>(body);
+            body = await _expressionEvaluator.EvaluateAsync(expressionBody, workflowContext, null);
 
             var message = new MailMessage
             {
