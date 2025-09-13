@@ -1,6 +1,5 @@
 using Microsoft.Extensions.Localization;
 using OrchardCore.Email;
-using OrchardCore.Email.Workflows;
 using OrchardCore.Liquid;
 using OrchardCore.Templates.Services;
 using OrchardCore.Workflows.Abstractions.Models;
@@ -39,7 +38,7 @@ namespace Etch.OrchardCore.Workflows.TemplateEmail.Workflows.Activities
 
         private IStringLocalizer T { get; }
 
-        public override LocalizedString DisplayText => T["Template Email Task"];
+        public override LocalizedString DisplayText => T["Html Template Email Task"];
         public override string Name => nameof(TemplateEmailTask);
         public override LocalizedString Category => T["Messaging"];
 
