@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Localization;
+using Microsoft.Extensions.Logging;
 using OrchardCore.Email;
 using OrchardCore.Liquid;
 using OrchardCore.Templates.Services;
@@ -7,6 +8,7 @@ using OrchardCore.Workflows.Activities;
 using OrchardCore.Workflows.Models;
 using OrchardCore.Workflows.Services;
 using System.Collections.Generic;
+using System.Linq.Expressions;
 using System.Text.Encodings.Web;
 using System.Threading.Tasks;
 
@@ -15,12 +17,14 @@ namespace Etch.OrchardCore.Workflows.TemplateEmail.Workflows.Activities
     public class TemplateEmailTask : TaskActivity<TemplateEmailTask>
     {
         private readonly IWorkflowExpressionEvaluator _expressionEvaluator;
+        private readonly ILogger<TemplateEmailTask> _logger;
         private readonly HtmlEncoder _htmlEncoder;
         private readonly IEmailService _emailService;
         private readonly TemplatesManager _templatesManager;
 
         public TemplateEmailTask(
             IWorkflowExpressionEvaluator expressionEvaluator,
+            ILogger<TemplateEmailTask> logger,
             ILiquidTemplateManager liquidTemplateManager,
             IStringLocalizer<TemplateEmailTask> localizer,
             HtmlEncoder htmlEncoder,
@@ -29,6 +33,7 @@ namespace Etch.OrchardCore.Workflows.TemplateEmail.Workflows.Activities
         )
         {
             _expressionEvaluator = expressionEvaluator;
+            _logger = logger;
             _htmlEncoder = htmlEncoder;
             _emailService = smtpService;
             _templatesManager = templatesManager;
@@ -146,7 +151,7 @@ namespace Etch.OrchardCore.Workflows.TemplateEmail.Workflows.Activities
 
         public override async Task<ActivityExecutionResult> ExecuteAsync(WorkflowExecutionContext workflowContext, ActivityContext activityContext)
         {
-            
+
             var body = await _expressionEvaluator.EvaluateAsync(Body, workflowContext, null);
 
             var author = await _expressionEvaluator.EvaluateAsync(Author, workflowContext, null);
@@ -171,8 +176,16 @@ namespace Etch.OrchardCore.Workflows.TemplateEmail.Workflows.Activities
             }
 
             var expressionBody = new WorkflowExpression<string>(body);
-            body = await _expressionEvaluator.EvaluateAsync(expressionBody, workflowContext, null);
-
+            try
+            {
+                body = await _expressionEvaluator.EvaluateAsync(expressionBody, workflowContext, _htmlEncoder);
+            }
+            catch(Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred while processing the body Liquid template: {body}", body);
+                return Outcomes("Failed");
+            }
+           
             var message = new MailMessage
             {
                 // Author and Sender are both not required fields.
